@@ -78,9 +78,6 @@ public class StateMachine
     {
         switch (stateId)
         {
-            case StateMachineIds.GroundedMovement:  return new GroundedMovementState(this, stateId);
-            case StateMachineIds.JumpingMovement:   return new JumpingMovementState(this, stateId);
-            case StateMachineIds.FallingMovement:   return new FallingMovementState(this, stateId);
             default:
                 Debug.Assert(false, "StateMachineState.CreateStateForId attempted to create a state machine state for an unsupported type.");
                 return null;
