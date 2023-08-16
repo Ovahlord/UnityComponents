@@ -17,7 +17,7 @@ public class StateMachine
     public T GetOwner<T>() where T : class
     {
         Debug.Assert(_owner.GetType() == typeof(T), "StateMachine.GetOwner: mismatching object type.");
-        return (T)_owner;
+        return _owner as T;
     }
 
     public T GetState<T>(StateMachineIds stateId) where T : class
@@ -40,7 +40,7 @@ public class StateMachine
                 continue;
             }
 
-            AddState(CreateStateForId(stateId));
+            AddState(StateMachineStateFactory.CreateStateForId(this, stateId));
         }
     }
 
@@ -73,14 +73,4 @@ public class StateMachine
     }
 
     public StateMachineState GetActiveState() { return _activeState; }
-
-    private StateMachineState CreateStateForId(StateMachineIds stateId)
-    {
-        switch (stateId)
-        {
-            default:
-                Debug.Assert(false, "StateMachineState.CreateStateForId attempted to create a state machine state for an unsupported type.");
-                return null;
-        }
-    }
 }
