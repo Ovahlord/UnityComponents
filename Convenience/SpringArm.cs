@@ -1,8 +1,9 @@
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+/*
+* This file is part of the UnityComponents repository authored by Ovahlord (https://github.com/Ovahlord/UnityComponents)
+* All components in this repository are royalty free and can be used for commercial purposes. Enjoy.
+*/
 
+using UnityEngine;
 
 public class SpringArmCollisionContext
 {
@@ -18,16 +19,25 @@ public class SpringArmCollisionContext
 
 public class SpringArm : MonoBehaviour
 {
+    private enum SpringArmUpdateMethod
+    {
+        OnUpdate        = 0,
+        OnFixedUpdate   = 1,
+        OnLateUpdate    = 2
+    }
+
     [Tooltip("The maximum length of the spring arm. The attached transform will be relocated to the tip of the arm")]
     [SerializeField][Min(0f)] private float _armLength = 0f;
     [Tooltip("The transform that will be relocated to the tip of the arm")]
     [SerializeField] private Transform _attachment = null;
-    [Tooltip("The direction that the tip of the arm will be faciing")]
+    [Tooltip("The direction that the tip of the arm will be facing. For example (0, 0, -1) will make the arm reach backward which is often used for camera attachments")]
     [SerializeField] private Vector3 _direction = Vector3.zero;
     [Tooltip("The layers that the spring arm will collide with and adjust its distance to it")]
     [SerializeField] private LayerMask _collisionLayerMask = 0;
     [Tooltip("Makes the attachment face towards the origin point of the arm (the position of the transform this component is attached to)")]
     [SerializeField] private bool _faceOrigin = true;
+    [Tooltip("Defines the update method that is being used to update the spring arm length and its attached transform's position")]
+    [SerializeField] private SpringArmUpdateMethod _updateMethod = SpringArmUpdateMethod.OnUpdate;
 
     public delegate void CollisionEventHandler(object sender, SpringArmCollisionContext context);
     public event CollisionEventHandler OnCollide;
@@ -52,10 +62,23 @@ public class SpringArm : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        UpdateTransformPosition();
+        if (_updateMethod == SpringArmUpdateMethod.OnUpdate)
+            UpdateTransformPosition();
     }
 
-    void UpdateTransformPosition()
+    void FixedUpdate()
+    {
+        if (_updateMethod == SpringArmUpdateMethod.OnFixedUpdate)
+            UpdateTransformPosition();
+    }
+
+    void LateUpdate()
+    {
+        if (_updateMethod == SpringArmUpdateMethod.OnLateUpdate)
+            UpdateTransformPosition();
+    }
+
+    private void UpdateTransformPosition()
     {
         if (_attachment == null)
             return;
