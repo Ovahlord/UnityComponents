@@ -18,7 +18,7 @@ public class TransformFollower : MonoBehaviour
 
     public void SetDestinationOffset(Vector3 offset) { _destinationOffset = offset; }
     public void SetTarget(Transform target) { _target = target; }
-    public void SetCatchUpFactor(float value) { _catchupFactor = Mathf.Clamp(_catchupFactor, 0f, 1f); }
+    public void SetCatchupFactor(float value) { _catchupFactor = Mathf.Clamp(_catchupFactor, 0f, 1f); }
 
     // Start is called before the first frame update
     void Start()
