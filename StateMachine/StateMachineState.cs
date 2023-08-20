@@ -6,18 +6,14 @@ public class StateMachineState
 {
     public StateMachineState(StateMachine stateMachine, StateMachineIds stateId)
     {
-        _stateMachine = stateMachine;
-        _stateId = stateId;
+        StateMachine = stateMachine;
+        Id = stateId;
     }
 
-    private StateMachine _stateMachine;
-    private StateMachineIds _stateId;
-
-    public StateMachine GetStateMachine() { return _stateMachine; }
-    public StateMachineIds GetId() { return _stateId; }
+    public StateMachine StateMachine { get; private set; }
+    public StateMachineIds Id { get; private set; }
 
     public virtual void OnEnter() { }
     public virtual void OnUpdate() { }
     public virtual void OnLeave() { }
-
 }

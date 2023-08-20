@@ -12,7 +12,8 @@ public class StateMachine
 
     private object _owner;
     private Dictionary<StateMachineIds, StateMachineState> _states = new();
-    private StateMachineState _activeState;
+    public StateMachineState ActiveState { get; private set; } = null;
+    public StateMachineState PreviousActiveState { get; private set; } = null;
 
     public T GetOwner<T>() where T : class
     {
@@ -46,15 +47,15 @@ public class StateMachine
 
     public void Update()
     {
-        _activeState?.OnUpdate();
+        ActiveState?.OnUpdate();
     }
 
     private void AddState(StateMachineState state)
     {
-        if (_states.ContainsKey(state.GetId()))
+        if (_states.ContainsKey(state.Id))
             return;
 
-        _states[state.GetId()] = state;
+        _states[state.Id] = state;
     }
 
     public void SetActiveState(StateMachineIds stateId)
@@ -67,10 +68,9 @@ public class StateMachine
 
     private void SetActiveState(StateMachineState state)
     {
-        _activeState?.OnLeave();
-        _activeState = state;
-        _activeState.OnEnter();
+        ActiveState?.OnLeave();
+        PreviousActiveState = ActiveState;
+        ActiveState = state;
+        ActiveState.OnEnter();
     }
-
-    public StateMachineState GetActiveState() { return _activeState; }
 }
