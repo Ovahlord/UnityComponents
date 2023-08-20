@@ -19,7 +19,7 @@ public class SpringArmCollisionContext
 
 public class SpringArm : MonoBehaviour
 {
-    private enum SpringArmUpdateMethod
+    public enum SpringArmUpdateMethod
     {
         OnUpdate        = 0,
         OnFixedUpdate   = 1,
@@ -42,24 +42,23 @@ public class SpringArm : MonoBehaviour
     public delegate void CollisionEventHandler(object sender, SpringArmCollisionContext context);
     public event CollisionEventHandler OnCollide;
 
-    public void SetAttachment(Transform attachment) { _attachment = attachment; }
-    public void SetArmLength(float length) { _armLength = length; }
-    public void SetDirection(Vector3 direction) { _direction = direction; }
-    public void SetFaceToOrigin(bool enable) { _faceOrigin = enable; }
-    public void SetCollisionLayerMask(LayerMask collisionLayerMask) { _collisionLayerMask = collisionLayerMask; }
+    public Transform Attachment { set { _attachment = value; } }
+    public float ArmLength { set { _armLength = Mathf.Max(0f, value); } }
+    public Vector3 Direction { set { _direction = value; } }
+    public bool FaceOrigin { set { _faceOrigin = value; } }
+    public LayerMask CollisionLayerMask { set { _collisionLayerMask = value; } }
+    public SpringArmUpdateMethod UpdateMethod { set { _updateMethod = value; } }
 
     private void OnValidate()
     {
         UpdateTransformPosition();
     }
 
-    // Start is called before the first frame update
     void Start()
     {
         UpdateTransformPosition();
     }
 
-    // Update is called once per frame
     void Update()
     {
         if (_updateMethod == SpringArmUpdateMethod.OnUpdate)
