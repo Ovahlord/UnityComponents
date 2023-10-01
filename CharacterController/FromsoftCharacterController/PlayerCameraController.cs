@@ -28,17 +28,14 @@ public class PlayerCameraController : MonoBehaviour
     private float _xAngle = 0f;
     private bool _isUsingGamepad = false;
 
-    private void OnValidate()
+    private void Awake()
     {
         InputUser.onChange += (InputUser user, InputUserChange change, InputDevice device) =>
         {
             if (change == InputUserChange.ControlSchemeChanged)
                 _isUsingGamepad = user.controlScheme.Value.name.Equals("Gamepad");
         };
-    }
 
-    private void Awake()
-    {
         _camera = Camera.main.transform;
 
         Quaternion initialRotation = Quaternion.Euler(_initalCameraAngle, transform.eulerAngles.y, transform.eulerAngles.z);
@@ -97,7 +94,7 @@ public class PlayerCameraController : MonoBehaviour
         _camera.LookAt(_destinationTransformPosition);
 
         // Now we can apply the 2nd lerp to our actual camera position
-        Vector3 direction = Quaternion.Euler(_xAngle, _camera.eulerAngles.y, _camera.eulerAngles.z) * Vector3.back; 
+        Vector3 direction = Quaternion.Euler(_xAngle, _camera.eulerAngles.y, _camera.eulerAngles.z) * Vector3.back;
         Vector3 destination = _destinationTransformPosition + direction * CameraDistance;
 
         destination = Vector3.Lerp(_camera.position, destination, Time.deltaTime * (1f - _dampeningFactor) * 10);
