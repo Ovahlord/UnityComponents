@@ -23,8 +23,30 @@ public class UnitActionController : MonoBehaviour
         get { return _autoSprint; }
         set
         {
+            // AutoSprint has been disabled, cancel the current sprint right away
             _autoSprint = value;
-            ToggleSprint(_autoSprint);
+            if (!_autoSprint)
+                ToggleSprint(false);
+        }
+    }
+
+    public bool CanSprint 
+    { 
+        get 
+        {
+            // The unit has not enough stamina
+            if (_statsController.CurrentStamina == 0)
+                return false;
+
+            // The unit is not moving right now
+            if (_movementController.MotionDirection.magnitude == 0f)
+                return false;
+
+            // The unit has yet to reach a certain stamina threshold before being allowed to sprint again
+            if (_statsController.CurrentStamina < _sprintStaminaRecoveryThreshold)
+                return false;
+
+            return true;
         }
     }
 
@@ -41,29 +63,22 @@ public class UnitActionController : MonoBehaviour
         if (_sprintStaminaRecoveryThreshold > 0 && _statsController.CurrentStamina >= _sprintStaminaRecoveryThreshold)
             _sprintStaminaRecoveryThreshold = 0;
 
-        // We ran out of stamina, time to disable sprinting
-        if (HasSprintEnabled && _statsController.CurrentStamina == 0)
-        {
+        if (HasSprintEnabled && !CanSprint)
             ToggleSprint(false);
-            return;
-        }
-
-        // start sprinting again as soon as we can
-        ToggleSprint(AutoSprint);
+        else if (AutoSprint && CanSprint)
+            ToggleSprint(true);
     }
 
-    public void SetMotionType(UnitMovementController.MovementType movementType) { _movementController.MotionType = movementType; }
-    public void MoveDirection(Vector3 direction) { _movementController.MotionDirection = direction; }
+    public void SetMotionData(Vector3 direction, UnitMovementController.MovementType movementType)
+    {
+        _movementController.MotionDirection = direction;
+        _movementController.MotionType = movementType;
+    }
 
     // Enables the sprinting mechanic and will toggle off automatically when the unit has run out of stamina
     public bool ToggleSprint(bool enable)
     {
-        // Check if the sprint functionality is enabled
-        if (_actions == null || !_actions.IsSprintEnabled)
-            return false;
-
-        // Eligibility checks
-        if (HasSprintEnabled == enable || (enable && (_statsController.CurrentStamina == 0 || _statsController.CurrentStamina < _sprintStaminaRecoveryThreshold)))
+        if (_actions == null || !_actions.IsSprintEnabled || HasSprintEnabled == enable || (enable && !CanSprint))
             return false;
 
         HasSprintEnabled = enable;
