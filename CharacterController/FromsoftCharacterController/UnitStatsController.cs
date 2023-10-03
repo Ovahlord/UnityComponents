@@ -14,14 +14,8 @@ public class UnitStatsController : MonoBehaviour
     private readonly float[] _maxValue = new float[(int)RessourceIndex.Max];
     private readonly float[] _currentValue = new float[(int)RessourceIndex.Max];
     private readonly float[] _recoveryRate = new float[(int)RessourceIndex.Max];
+    private readonly float[] _recoveryRateOverride = new float[(int)RessourceIndex.Max];
     private readonly float[] _recoveryDelay = new float[(int)RessourceIndex.Max];
-
-    private float _sprintStaminaCost = 0f;
-    private float _exhaustionRecoveryDelay = 0f;
-    private int _dodgeStaminaCost = 0;
-    private float _dodgeRecoveryDelay = 0f;
-
-    private bool _isRecoveringFromExhaustion = false;
 
     public int CurrentHealth { get { return (int)_currentValue[(int)RessourceIndex.Health]; } }
     public int CurrentPower { get { return (int)_currentValue[(int)RessourceIndex.Power]; } }
@@ -30,9 +24,6 @@ public class UnitStatsController : MonoBehaviour
     public float CurrentHealthPct { get { return _currentValue[(int)RessourceIndex.Health] / _unitStats.MaxHealth; } }
     public float CurrentPowerPct { get { return _currentValue[(int)RessourceIndex.Power] / _unitStats.MaxPower; } }
     public float CurrentStaminaPct { get { return _currentValue[(int)RessourceIndex.Stamina] / _unitStats.MaxStamina; } }
-
-    public bool IsSprinting { get; private set; }
-    public bool CanPerformDodge { get { return _currentValue[(int)RessourceIndex.Stamina] >= _dodgeStaminaCost; } }
 
     private void Awake()
     {
@@ -49,62 +40,40 @@ public class UnitStatsController : MonoBehaviour
         _recoveryRate[(int)RessourceIndex.Stamina] = _unitStats.StaminaRecoveryRate;
 
         for (int i = 0; i < (int)RessourceIndex.Max; ++i)
+        {
             _recoveryDelay[i] = 0f;
-
-        _sprintStaminaCost = _unitStats.SprintStaminaCost;
-        _exhaustionRecoveryDelay = _unitStats.ExhaustionRecoveryDelay;
-        _dodgeStaminaCost = _unitStats.DodgeStaminaCost;
-        _dodgeRecoveryDelay = _unitStats.DodgeRecoveryDelay;
+            _recoveryRateOverride[i] = 0f;
+        }
     }
 
     // Update is called once per frame
     void Update()
     {
-        // Sprinting
-        if (IsSprinting)
-        {
-            // We are currently sprinting. Drain stamina and disable sprinting if we are running out of it.
-            _currentValue[(int)RessourceIndex.Stamina] -= _sprintStaminaCost * Time.deltaTime;
-            if (_currentValue[(int)RessourceIndex.Stamina] <= 0f)
-            {
-                _currentValue[(int)RessourceIndex.Stamina] = 0f;
-                IsSprinting = false;
-
-                // If we hit zero stamina while sprinting, we trigger a recovery phase which lasts until we have recovered 20% stamina
-                _isRecoveringFromExhaustion = true;
-                _recoveryDelay[(int)RessourceIndex.Stamina] = _exhaustionRecoveryDelay;
-            }
-            return;
-        }
-
-        // Ressource regeneration
+        // Ressource recovery
         for (int i = 0; i < (int)RessourceIndex.Max; ++i)
         {
             // The regeneration is currently delayed so we have to wait for the delay to expire before we can continue
             if (_recoveryDelay[i] > 0f)
                 _recoveryDelay[i] -= Time.deltaTime;
 
-            if (_currentValue[i] == _maxValue[i] || _recoveryRate[i] == 0f || _recoveryDelay[i] > 0f)
+            // The regeneration is prevent either by being already fully recovered or we are prevented by certain circumstances)
+            float recoveryRate = _recoveryRateOverride[i] != 0f ? _recoveryRateOverride[i] : _recoveryRate[i];
+            float targetValue = recoveryRate > 0f ? _maxValue[i] : 0f;
+            if (_currentValue[i] == targetValue || recoveryRate == 0f || _recoveryDelay[i] > 0f)
                 continue;
 
-            _currentValue[i] = Mathf.Min(_currentValue[i] + _recoveryRate[i] * Time.deltaTime, _maxValue[i]);
-
-            if (i == (int)RessourceIndex.Stamina)
-                if (CurrentStaminaPct >= 0.2f)
-                    _isRecoveringFromExhaustion = false;
+            // And finally, recover the ressource
+            _currentValue[i] = Mathf.Clamp(_currentValue[i] + recoveryRate * Time.deltaTime, 0f, _maxValue[i]);
         }
     }
 
-    public void ToggleSprint(bool enable)
+    public void SetRecoveryRateOverride(RessourceIndex ressourceIndex, float rate) { _recoveryRateOverride[(int)ressourceIndex] = rate; }
+    public void SetRecoveryDelay(RessourceIndex ressourceIndex, float delay) { _recoveryDelay[(int)ressourceIndex] = delay; }
+    public void ModifyRessource(RessourceIndex ressourceIndex, int amount)
     {
-        if (IsSprinting == enable || _isRecoveringFromExhaustion)
-            return;
-
-        IsSprinting = enable;
-    }
-    public void DrainDodgeStamina()
-    {
-        _currentValue[(int)RessourceIndex.Stamina] -= _dodgeStaminaCost;
-        _recoveryDelay[(int)RessourceIndex.Stamina] = _dodgeRecoveryDelay;
+        if (_currentValue[(int)ressourceIndex] >= amount)
+            _currentValue[(int)ressourceIndex] -= amount;
+        else
+            _currentValue[(int)ressourceIndex] = 0f;
     }
 }

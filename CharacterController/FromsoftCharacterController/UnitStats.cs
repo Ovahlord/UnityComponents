@@ -16,7 +16,7 @@ public enum RessourceIndex : int
     Max
 }
 
-[CreateAssetMenu( fileName = "UnitStat", menuName = "UnitStats/UnitStats")]
+[CreateAssetMenu( fileName = "UnitStats", menuName = "UnitStats/UnitStats")]
 public class UnitStats : ScriptableObject
 {
     [Header("Health")]
@@ -34,13 +34,6 @@ public class UnitStats : ScriptableObject
     [SerializeField][Min(0)] private int _startStamina = 100;
     [SerializeField][Min(0f)] private float _staminaRecoveryRate = 20f;
 
-    [Header("Stamina Cost and Recovery")]
-    [SerializeField][Min(0f)] private float _sprintStaminaCost = 20f;
-    [SerializeField][Min(0f)] private float _exhaustionRecoveryDelay = 1f;
-
-    [SerializeField][Min(0)] private int _dodgeStaminaCost = 20;
-    [SerializeField][Min(0f)] private float _dodgeRecoveryDelay = 0.5f;
-
     public int MaxHealth { get { return _maxHealth; } }
     public int StartHealth { get { return _startHealth; } }
     public float HealthRecoveryRate { get { return _healthRecoveryRate; } }
@@ -52,10 +45,4 @@ public class UnitStats : ScriptableObject
     public int MaxStamina { get { return _maxStamina; } }
     public int StartStamina { get { return _startStamina; } }
     public float StaminaRecoveryRate { get { return _staminaRecoveryRate; } }
-
-
-    public float SprintStaminaCost { get {  return _sprintStaminaCost; } }
-    public float ExhaustionRecoveryDelay { get { return _exhaustionRecoveryDelay; } }
-    public int DodgeStaminaCost { get { return _dodgeStaminaCost; } }
-    public float DodgeRecoveryDelay { get { return _dodgeRecoveryDelay; } }
 }

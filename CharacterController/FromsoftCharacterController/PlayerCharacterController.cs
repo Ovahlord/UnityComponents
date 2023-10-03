@@ -6,60 +6,47 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
-[RequireComponent(typeof(PlayerInput), typeof(PlayerCameraController), typeof(UnitMovementController))]
-[RequireComponent(typeof(UnitStatsController))]
+[RequireComponent(typeof(PlayerInput), typeof(PlayerCameraController))]
+[RequireComponent(typeof(UnitActionController))]
 public class PlayerCharacterController : MonoBehaviour
 {
     [SerializeField] private GameObject _playerHudPrefab = null;
 
-    private UnitMovementController _movementController = null;
-    private UnitStatsController _unitStatController = null;
+    private UnitActionController _actionController = null;
     private PlayerCameraController _cameraController = null;
-    private PlayerHUDController _hudController = null;
     private Vector2 _moveInputValue = Vector2.zero;
 
     private void Awake()
     {
-        _movementController = GetComponent<UnitMovementController>();
+        _actionController = GetComponent<UnitActionController>();
         _cameraController = GetComponent<PlayerCameraController>();
-        _unitStatController = GetComponent<UnitStatsController>();
     }
 
     private void Start()
     {
-        if (_playerHudPrefab != null)
-        {
-            GameObject hud = Instantiate(_playerHudPrefab, Vector3.zero, Quaternion.identity, null);
-            _hudController = hud.GetComponent<PlayerHUDController>();
-            _hudController.UpdatePlayerBars(_unitStatController.CurrentHealthPct, _unitStatController.CurrentPowerPct, _unitStatController.CurrentStaminaPct);
-        }
-
         Cursor.visible = false;
+        if (_playerHudPrefab != null)
+            Instantiate(_playerHudPrefab, Vector3.zero, Quaternion.identity, null);
     }
 
     // Update is called once per frame
     void Update()
     {
-        if (_unitStatController.IsSprinting)
-            _movementController.MotionType = UnitMovementController.MovementType.Sprint;
-        else if (_moveInputValue.magnitude < 0.5f)
-            _movementController.MotionType = UnitMovementController.MovementType.Walk;
-        else
-            _movementController.MotionType = UnitMovementController.MovementType.Run;
-
         Vector3 direction = Quaternion.Euler(0f, _cameraController.CameraYAngle, 0f) * new Vector3(_moveInputValue.x, 0f, _moveInputValue.y);
-        _movementController.MotionDirection = direction.normalized;
-
-        _hudController.UpdatePlayerBars(_unitStatController.CurrentHealthPct, _unitStatController.CurrentPowerPct, _unitStatController.CurrentStaminaPct);
+        _actionController.MoveDirection(direction);
     }
 
-    public void OnMove(InputValue value) { _moveInputValue = value.Get<Vector2>(); }
-    public void OnLook(InputValue value) { _cameraController.TurnValue = value.Get<Vector2>(); }
-    public void OnSprint(InputValue value) { _unitStatController.ToggleSprint(value.isPressed); }
-    public void OnSprintStop(InputValue value) { _unitStatController.ToggleSprint(value.isPressed); }
-    public void OnDodge(InputValue value)
+    public void OnMove(InputValue value)
     {
-        if (!value.isPressed && _unitStatController.CanPerformDodge)
-            _unitStatController.DrainDodgeStamina();
+        _moveInputValue = value.Get<Vector2>();
+        if (_moveInputValue.magnitude <= 0.5f)
+            _actionController.SetMotionType(UnitMovementController.MovementType.Walk);
+        else
+            _actionController.SetMotionType(UnitMovementController.MovementType.Run);
     }
+
+    public void OnLook(InputValue value) { _cameraController.TurnValue = value.Get<Vector2>(); }
+    public void OnSprint(InputValue value) { _actionController.AutoSprint = true; }
+    public void OnSprintStop(InputValue value) { _actionController.AutoSprint = false; }
+    public void OnDodge(InputValue value) { _actionController.PerformDodge(); }
 }

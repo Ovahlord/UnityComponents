@@ -21,6 +21,7 @@ public class UnitMovementController : MonoBehaviour
     [SerializeField] private float _turnSpeed   = 720f;
 
     private CharacterController _characterController = null;
+
     public Vector3 MotionDirection { get; set; } = Vector3.zero;
     public MovementType MotionType { get; set; } = MovementType.Walk;
 
