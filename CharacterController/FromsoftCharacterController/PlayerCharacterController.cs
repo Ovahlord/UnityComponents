@@ -5,6 +5,8 @@
 
 using UnityEngine;
 using UnityEngine.InputSystem;
+using static UnityEngine.EventSystems.EventTrigger;
+using static UnityEngine.GraphicsBuffer;
 
 [RequireComponent(typeof(PlayerInput), typeof(PlayerCameraController))]
 [RequireComponent(typeof(UnitActionController))]
@@ -14,8 +16,6 @@ public class PlayerCharacterController : MonoBehaviour
     [SerializeField] private GameObject _playerHudPrefab = null;
 
     private UnitActionController _actionController = null;
-    private PlayerCameraController _cameraController = null;
-    private PlayerHUDController _hudController = null;
     private PlayerInput _input = null;
     private InputAction _dodgeAction = null;
     private Vector2 _moveInputValue = Vector2.zero;
@@ -23,7 +23,6 @@ public class PlayerCharacterController : MonoBehaviour
     private void Awake()
     {
         _actionController = GetComponent<UnitActionController>();
-        _cameraController = GetComponent<PlayerCameraController>();
         _input = GetComponent<PlayerInput>();
         _dodgeAction = _input.actions["Dodge"];
     }
@@ -32,7 +31,7 @@ public class PlayerCharacterController : MonoBehaviour
     {
         Cursor.visible = false;
         if (_playerHudPrefab != null)
-            _hudController = Instantiate(_playerHudPrefab, Vector3.zero, Quaternion.identity, null).GetComponent<PlayerHUDController>();
+            Instantiate(_playerHudPrefab, Vector3.zero, Quaternion.identity, null);
     }
 
     private void Update()
@@ -46,7 +45,7 @@ public class PlayerCharacterController : MonoBehaviour
         _moveInputValue = value.Get<Vector2>();
     }
 
-    public void OnLook(InputValue value) { _cameraController.TurnInputValue = value.Get<Vector2>(); }
+    public void OnLook(InputValue value) { PlayerCameraController.TurnInputValue = value.Get<Vector2>(); }
 
     public void OnSprint(InputValue value)
     {
@@ -62,19 +61,11 @@ public class PlayerCharacterController : MonoBehaviour
 
     public void OnDodge(InputValue value) { _actionController.PerformDodge(); }
 
-    public void OnLockCamera(InputValue value)
-    {
-        Transform target = null;
-        if (!_cameraController.IsLockedToTarget)
-            target = GameObject.FindWithTag("LockTarget").transform;
-
-        _cameraController.LockTarget(target);
-        _hudController.SetLockTarget(target);
-    }
+    public void OnLockCamera(InputValue value) { PlayerCameraController.ToggleCameraLock(); }
 
     private void UpdateMotionData()
     {
-        Vector3 direction = Quaternion.Euler(0f, _cameraController.CameraYAngle, 0f) * new Vector3(_moveInputValue.x, 0f, _moveInputValue.y);
+        Vector3 direction = Quaternion.Euler(0f, PlayerCameraController.CameraYAngle, 0f) * new Vector3(_moveInputValue.x, 0f, _moveInputValue.y);
 
         UnitMovementController.MovementType motionType = UnitMovementController.MovementType.Run;
         if (_actionController.HasSprintEnabled)

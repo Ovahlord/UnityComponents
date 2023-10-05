@@ -6,6 +6,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Users;
+using UnityEngine.UIElements;
 using static UnityEngine.UI.Image;
 
 public class PlayerCameraController : MonoBehaviour
@@ -17,18 +18,27 @@ public class PlayerCameraController : MonoBehaviour
     [SerializeField][Min(0f)] private float _cameraDistance = 10f;
     [SerializeField] private LayerMask _collisionLayerMask = 0;
 
-
     [Header("Camera Rotation Settings")]
     [SerializeField][Range(-90f, 90f)] private float _initialCameraLearnAngle = 20f;
     [SerializeField][Range(-89f, 0f)] private float _minCameraLeanAngle = -30;
     [SerializeField][Range(0f, 90f)] private float _maxCameraLeanAngle = 60;
     [SerializeField][Range(-90f, 90f)] private float _lockedCameraLeanAngle = 20f;
-    public Vector2 TurnInputValue { get; set; }
-    public float CameraYAngle { get { return _camera.eulerAngles.y; } }
-    public bool IsLockedToTarget { get { return _lockTarget != null; } }
+
+    [Header("Camera Target Locking")]
+    [SerializeField] private LayerMask _targetLockingLayerMask = 0;
+    [SerializeField] private float _targetLockingMaxDistance = 50f;
+    [SerializeField] private float _lostTargetRecoveryTime = 2f;
+
+    private static PlayerCameraController _instance = null;
+    private readonly RaycastHit[] _lockTargetHits = new RaycastHit[50]; // a buffer of 50 possible targets in one sphere cast should be more than enough
+
+    public static Vector2 TurnInputValue { get; set; }
+    public static float CameraYAngle { get { return _instance._camera.eulerAngles.y; } }
+    public static bool IsLockedToTarget { get { return _instance._lockTarget != null; } }
 
     private bool _isUsingGamepad = false;
     private float? _lockFacingTimer = null;
+    private float? _lostTargetRecoveryTimer = null;
     private Transform _camera = null;
     private Transform _lockTarget = null;
     private Vector3 _originPoint = Vector3.zero;
@@ -37,6 +47,12 @@ public class PlayerCameraController : MonoBehaviour
 
     private void Awake()
     {
+        if (_instance != null)
+            Destroy(_instance);
+
+        _instance = this;
+        DontDestroyOnLoad(this);
+
         InputUser.onChange += (InputUser user, InputUserChange change, InputDevice device) =>
         {
             if (change == InputUserChange.ControlSchemeChanged)
@@ -52,6 +68,29 @@ public class PlayerCameraController : MonoBehaviour
         Quaternion startRotation = Quaternion.Euler(_initialCameraLearnAngle, transform.eulerAngles.y, transform.eulerAngles.z);
         _camera.SetPositionAndRotation(_originPoint + startRotation * Vector3.back * _cameraDistance, startRotation);
         _targetRotation = startRotation.eulerAngles;
+    }
+
+    private void FixedUpdate()
+    {
+        if (_lockTarget != null)
+        {
+            if (!ValidateLockTarget())
+            {
+                if (!_lostTargetRecoveryTimer.HasValue)
+                    _lostTargetRecoveryTimer = _lostTargetRecoveryTime;
+                else
+                {
+                    _lostTargetRecoveryTimer -= Time.fixedDeltaTime;
+                    if (_lostTargetRecoveryTimer <= 0f)
+                    {
+                        ToggleCameraLock();
+                        _lostTargetRecoveryTimer = null;
+                    }
+                }
+            }
+            else
+                _lostTargetRecoveryTimer = null;
+        }
     }
 
     private void LateUpdate()
@@ -144,7 +183,7 @@ public class PlayerCameraController : MonoBehaviour
         // We have locked onto a target. Lerp towards the target angle and increase the speed the longer it takes
         if (_lockFacingTimer.HasValue)
         {
-            _lockFacingTimer += Time.deltaTime;
+            _lockFacingTimer += Time.deltaTime * 0.5f;
             _camera.rotation = Quaternion.Lerp(Quaternion.Euler(oldRotation), Quaternion.Euler(currentRotation), Mathf.Min(_lockFacingTimer.Value));
             if (_lockFacingTimer.Value >= 1f)
                 _lockFacingTimer = null;
@@ -153,9 +192,71 @@ public class PlayerCameraController : MonoBehaviour
             _camera.rotation = Quaternion.Euler(angleX, currentRotation.y, currentRotation.z);
     }
 
-    public void LockTarget(Transform target)
+    public static void ToggleCameraLock()
     {
-        _lockFacingTimer = 0f;
-        _lockTarget = target;
+        // Release active lock
+        if (_instance._lockTarget != null)
+        {
+            _instance._lockTarget = null;
+            _instance._lockFacingTimer = 0f;
+        }
+        else
+        {
+            // Select new lock target
+            _instance._lockTarget = _instance.SelectLockTarget();
+            if (_instance._lockTarget != null)
+                _instance._lockFacingTimer = 0f;
+        }
+
+        PlayerHUDController.SetLockOnTarget(_instance._lockTarget);
+    }
+
+    private Transform SelectLockTarget()
+    {
+        Array.Clear(_lockTargetHits, 0, _lockTargetHits.Length);
+        int hitCount = Physics.SphereCastNonAlloc(transform.position, _targetLockingMaxDistance, Camera.main.transform.forward, _lockTargetHits, 0f, _targetLockingLayerMask.value);
+
+        Transform closestTarget = null;
+        for (int i = 0; i < hitCount; ++i)
+        {
+            Transform hitTransform = _lockTargetHits[i].transform;
+
+            // Only allow targets that are in front of the player
+            Vector3 directionToTarget = transform.position - hitTransform.position;
+            float angle = Vector3.Angle(Camera.main.transform.rotation * Vector3.forward, directionToTarget);
+            if (Mathf.Abs(angle) <= 90f)
+                continue;
+
+            if (Physics.Linecast(Camera.main.transform.position, hitTransform.position, _collisionLayerMask))
+                continue;
+
+            if (closestTarget == null)
+            {
+                closestTarget = hitTransform;
+                continue;
+            }
+
+            float closestDist = Vector3.Distance(transform.position, closestTarget.position);
+            if (Vector3.Distance(transform.position, hitTransform.position) <= closestDist)
+                closestTarget = hitTransform;
+        }
+
+        return closestTarget;
+    }
+
+    private bool ValidateLockTarget()
+    {
+        if (_lockTarget == null)
+            return false;
+
+        // Ensure that the target remains within our range
+        if (Vector3.Distance(transform.position, _lockTarget.position) > _targetLockingMaxDistance)
+            return false;
+
+        // Something came between the camera and the target. Interrupt targeting
+        if (Physics.Linecast(Camera.main.transform.position, _lockTarget.position, _collisionLayerMask))
+            return false;
+
+        return true;
     }
 }

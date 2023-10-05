@@ -12,15 +12,29 @@ public class PlayerHUDController : MonoBehaviour
     [SerializeField] private RectTransform _playerHealthBar;
     [SerializeField] private RectTransform _playerPowerBar;
     [SerializeField] private RectTransform _playerStaminaBar;
+    [SerializeField] private RectTransform _lockIndicatorPoint;
+
+    private static PlayerHUDController _instance = null;
+
+    private Transform _lockTarget = null;
+    private Image _lockTargetImage = null;
 
     private readonly float[] _playerBarInitialWidth = new float[(int)RessourceIndex.Max];
     private UnitStatsController _playerStatsController = null;
 
     private void Awake()
     {
+        if (_instance != null)
+            Destroy(_instance);
+
+        _instance = this;
+        DontDestroyOnLoad(this);
+
         _playerBarInitialWidth[(int)RessourceIndex.Health] = _playerHealthBar.rect.width;
         _playerBarInitialWidth[(int)RessourceIndex.Power] = _playerPowerBar.rect.width;
         _playerBarInitialWidth[(int)RessourceIndex.Stamina] = _playerStaminaBar.rect.width;
+        _lockTargetImage = _lockIndicatorPoint.GetComponent<Image>();
+        _lockTargetImage.enabled = false;
 
         GameObject player = GameObject.FindGameObjectWithTag("Player");
         if (player == null)
@@ -39,9 +53,10 @@ public class PlayerHUDController : MonoBehaviour
         }
     }
 
-    public void Update()
+    public void LateUpdate()
     {
         UpdatePlayerBars(_playerStatsController.CurrentHealthPct, _playerStatsController.CurrentPowerPct, _playerStatsController.CurrentStaminaPct);
+        UpdateLockIndicatorPoisition();
     }
 
     public void UpdatePlayerBars(float currentHealthPct, float currentPowerPct, float currentStaminaPct)
@@ -56,5 +71,22 @@ public class PlayerHUDController : MonoBehaviour
         Vector2 sizeDelta = barTransform.sizeDelta;
         sizeDelta.x = originalSize * pct;
         barTransform.sizeDelta = sizeDelta;
+    }
+
+    public static void SetLockOnTarget(Transform lockTarget)
+    {
+        if (_instance == null)
+            return;
+
+        _instance._lockTarget = lockTarget;
+        _instance._lockTargetImage.enabled = lockTarget != null;
+    }
+
+    private void UpdateLockIndicatorPoisition()
+    {
+        if (_lockTarget == null)
+            return;
+
+        _lockIndicatorPoint.position = Camera.main.WorldToScreenPoint(_lockTarget.position);
     }
 }
