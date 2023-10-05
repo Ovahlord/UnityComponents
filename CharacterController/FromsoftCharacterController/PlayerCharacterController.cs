@@ -10,10 +10,12 @@ using UnityEngine.InputSystem;
 [RequireComponent(typeof(UnitActionController))]
 public class PlayerCharacterController : MonoBehaviour
 {
+    [Header("HUD Settings")]
     [SerializeField] private GameObject _playerHudPrefab = null;
 
     private UnitActionController _actionController = null;
     private PlayerCameraController _cameraController = null;
+    private PlayerHUDController _hudController = null;
     private PlayerInput _input = null;
     private InputAction _dodgeAction = null;
     private Vector2 _moveInputValue = Vector2.zero;
@@ -24,14 +26,13 @@ public class PlayerCharacterController : MonoBehaviour
         _cameraController = GetComponent<PlayerCameraController>();
         _input = GetComponent<PlayerInput>();
         _dodgeAction = _input.actions["Dodge"];
-
     }
 
     private void Start()
     {
         Cursor.visible = false;
         if (_playerHudPrefab != null)
-            Instantiate(_playerHudPrefab, Vector3.zero, Quaternion.identity, null);
+            _hudController = Instantiate(_playerHudPrefab, Vector3.zero, Quaternion.identity, null).GetComponent<PlayerHUDController>();
     }
 
     private void Update()
@@ -45,7 +46,7 @@ public class PlayerCharacterController : MonoBehaviour
         _moveInputValue = value.Get<Vector2>();
     }
 
-    public void OnLook(InputValue value) { _cameraController.TurnValue = value.Get<Vector2>(); }
+    public void OnLook(InputValue value) { _cameraController.TurnInputValue = value.Get<Vector2>(); }
 
     public void OnSprint(InputValue value)
     {
@@ -60,6 +61,16 @@ public class PlayerCharacterController : MonoBehaviour
     }
 
     public void OnDodge(InputValue value) { _actionController.PerformDodge(); }
+
+    public void OnLockCamera(InputValue value)
+    {
+        Transform target = null;
+        if (!_cameraController.IsLockedToTarget)
+            target = GameObject.FindWithTag("LockTarget").transform;
+
+        _cameraController.LockTarget(target);
+        _hudController.SetLockTarget(target);
+    }
 
     private void UpdateMotionData()
     {

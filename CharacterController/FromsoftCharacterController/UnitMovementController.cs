@@ -36,7 +36,8 @@ public class UnitMovementController : MonoBehaviour
         if (MotionDirection.magnitude == 0f)
             return;
 
-        _characterController.Move(MotionDirection * (GetMovementSpeed() * Time.deltaTime));
+        _characterController.Move(MotionDirection * (GetMovementSpeed() * Time.deltaTime) + Vector3.down * 0.03f);
+
         float y = Mathf.MoveTowardsAngle(transform.eulerAngles.y, Mathf.Atan2(MotionDirection.x, MotionDirection.z) * Mathf.Rad2Deg, _turnSpeed * Time.deltaTime);
         transform.rotation = Quaternion.Euler(0f, y, 0f);
     }

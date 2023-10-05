@@ -109,7 +109,7 @@ public class UnitActionController : MonoBehaviour
         if (_statsController.CurrentStamina == 0)
             return false;
 
-        _statsController.ModifyRessource(RessourceIndex.Stamina, _actions.DodgeStaminaCost);
+        _statsController.ModifyRessource(RessourceIndex.Stamina, -_actions.DodgeStaminaCost);
         _statsController.SetRecoveryDelay(RessourceIndex.Stamina, _actions.DodgeRecoveryDelay);
 
         return true;

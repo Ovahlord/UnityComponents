@@ -68,12 +68,10 @@ public class UnitStatsController : MonoBehaviour
     }
 
     public void SetRecoveryRateOverride(RessourceIndex ressourceIndex, float rate) { _recoveryRateOverride[(int)ressourceIndex] = rate; }
+    public void SetRecoveryRate(RessourceIndex ressourceIndex, float rate) { _recoveryRate[(int)ressourceIndex] = rate; }
     public void SetRecoveryDelay(RessourceIndex ressourceIndex, float delay) { _recoveryDelay[(int)ressourceIndex] = delay; }
     public void ModifyRessource(RessourceIndex ressourceIndex, int amount)
     {
-        if (_currentValue[(int)ressourceIndex] >= amount)
-            _currentValue[(int)ressourceIndex] -= amount;
-        else
-            _currentValue[(int)ressourceIndex] = 0f;
+        _currentValue[(int)ressourceIndex] = Mathf.Clamp(_currentValue[(int)ressourceIndex] + amount, 0f, _maxValue[(int)ressourceIndex]);
     }
 }
