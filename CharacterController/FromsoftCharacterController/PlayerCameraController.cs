@@ -3,6 +3,7 @@
 * All components in this repository are royalty free and can be used for commercial purposes. Enjoy.
 */
 
+using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Users;
@@ -12,22 +13,36 @@ using static UnityEngine.UI.Image;
 public class PlayerCameraController : MonoBehaviour
 {
     [Header("Camera Following Settings")]
+    [Tooltip("The dampening factor for the point that the camera is facing by default. The higher the value, the further this point falls behind the player")]
     [SerializeField][Range(0f, 1f)] private float _facingPointDampening = 0.2f;
+    [Tooltip("The dampening factor for the camera movement. The higher the value, the longer it takes for the camera to each its destinatiin")]
     [SerializeField][Range(0f, 1f)] private float _cameraMovementDampening = 0.8f;
+    [Tooltip("Increases the height of all points by the specified values. 2f means that the camera will be 2 meters above the transform's position")]
     [SerializeField][Min(0f)] private float _heightOffset = 2f;
-    [SerializeField][Min(0f)] private float _cameraDistance = 10f;
+    [Tooltip("The distance between the facing point and the camera")]
+    [SerializeField][Min(1f)] private float _cameraDistance = 10f;
+    [Tooltip("The layermask that the camera can collide with. If set, gameobjects on these layers will cause the camera to adjust its distance accordingly")]
     [SerializeField] private LayerMask _collisionLayerMask = 0;
 
     [Header("Camera Rotation Settings")]
+    [Tooltip("The initial angle of the camera X axis at which the camera will be initialized")]
     [SerializeField][Range(-90f, 90f)] private float _initialCameraLearnAngle = 20f;
+    [Tooltip("The lower bounds of the camera angle. The camera will not be able to rotate below the specified degrees on its X axis")]
     [SerializeField][Range(-89f, 0f)] private float _minCameraLeanAngle = -30;
+    [Tooltip("The lower bounds of the camera angle. The camera will not be able to rotate above the specified degrees on its X axis")]
     [SerializeField][Range(0f, 90f)] private float _maxCameraLeanAngle = 60;
+    [Tooltip("The X angle in degrees that the camera will fixate on when a target has been locked onto")]
     [SerializeField][Range(-90f, 90f)] private float _lockedCameraLeanAngle = 20f;
 
     [Header("Camera Target Locking")]
+    [Tooltip("The layermask which lock target transforms must have in order to get selected")]
     [SerializeField] private LayerMask _targetLockingLayerMask = 0;
+    [Tooltip("The maximum distance between player and targets. If a target has been locked onto and goes beyond the distance, the lock will get released")]
     [SerializeField] private float _targetLockingMaxDistance = 50f;
+    [Tooltip("The amount of time in seconds which the player can restore the distance and line of sight between him and the locked target. If the timer expires, the lock will be released")]
     [SerializeField] private float _lostTargetRecoveryTime = 2f;
+    [Tooltip("The speed multiplier at which the camera will turn towards its lock target. This value is multiplied against Time.deltaTime")]
+    [SerializeField] private float _targetLockAngleAdaptionRate = 0.2f;
 
     private static PlayerCameraController _instance = null;
     private readonly RaycastHit[] _lockTargetHits = new RaycastHit[50]; // a buffer of 50 possible targets in one sphere cast should be more than enough
@@ -158,6 +173,9 @@ public class PlayerCameraController : MonoBehaviour
         // Estimate our camera position destination
         Vector3 direction = Quaternion.Euler(_targetRotation) * Vector3.back;
         Vector3 cameraDestination = _facingPoint + direction * _cameraDistance;
+        // Check for destination collision
+        if (Physics.Linecast(_facingPoint, cameraDestination, out RaycastHit hitInfo, _collisionLayerMask.value))
+            cameraDestination = hitInfo.point;
 
         if (_cameraMovementDampening != 0f)
             cameraDestination = Vector3.Lerp(_camera.position, cameraDestination, (1f - _cameraMovementDampening) * Time.deltaTime * 10f);
@@ -174,7 +192,7 @@ public class PlayerCameraController : MonoBehaviour
         Vector3 currentRotation = _camera.eulerAngles;
         _camera.LookAt(_facingPoint);
 
-        if (Physics.Raycast(_facingPoint, _camera.rotation * Vector3.back, out RaycastHit hitInfo, Vector3.Distance(_camera.position, _facingPoint), _collisionLayerMask.value))
+        if (Physics.Linecast(_facingPoint, _camera.position, out RaycastHit hitInfo, _collisionLayerMask.value))
             _camera.position = hitInfo.point;
 
         // Make sure that our leaning angle stays within boundaries
@@ -183,7 +201,7 @@ public class PlayerCameraController : MonoBehaviour
         // We have locked onto a target. Lerp towards the target angle and increase the speed the longer it takes
         if (_lockFacingTimer.HasValue)
         {
-            _lockFacingTimer += Time.deltaTime * 0.5f;
+            _lockFacingTimer += Time.deltaTime * _targetLockAngleAdaptionRate;
             _camera.rotation = Quaternion.Lerp(Quaternion.Euler(oldRotation), Quaternion.Euler(currentRotation), Mathf.Min(_lockFacingTimer.Value));
             if (_lockFacingTimer.Value >= 1f)
                 _lockFacingTimer = null;

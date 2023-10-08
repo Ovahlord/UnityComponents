@@ -3,6 +3,9 @@
 * All components in this repository are royalty free and can be used for commercial purposes. Enjoy.
 */
 
+using System;
+using System.Linq;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using static UnityEngine.EventSystems.EventTrigger;
