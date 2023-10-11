@@ -12,11 +12,17 @@ using static UnityEngine.UI.Image;
 
 public class PlayerCameraController : MonoBehaviour
 {
+    private class TargetLockFacingData
+    {
+        public float ElapsedTime = 0f;
+        public Quaternion OriginalRotation = Quaternion.identity;
+    }
+
     [Header("Camera Following Settings")]
     [Tooltip("The dampening factor for the point that the camera is facing by default. The higher the value, the further this point falls behind the player")]
-    [SerializeField][Range(0f, 1f)] private float _facingPointDampening = 0.2f;
+    [SerializeField][Range(0f, 1f)] private float _facingPointDampening = 0.5f;
     [Tooltip("The dampening factor for the camera movement. The higher the value, the longer it takes for the camera to each its destinatiin")]
-    [SerializeField][Range(0f, 1f)] private float _cameraMovementDampening = 0.8f;
+    [SerializeField][Range(0f, 1f)] private float _cameraMovementDampening = 0.5f;
     [Tooltip("Increases the height of all points by the specified values. 2f means that the camera will be 2 meters above the transform's position")]
     [SerializeField][Min(0f)] private float _heightOffset = 2f;
     [Tooltip("The distance between the facing point and the camera")]
@@ -42,7 +48,7 @@ public class PlayerCameraController : MonoBehaviour
     [Tooltip("The amount of time in seconds which the player can restore the distance and line of sight between him and the locked target. If the timer expires, the lock will be released")]
     [SerializeField] private float _lostTargetRecoveryTime = 2f;
     [Tooltip("The speed multiplier at which the camera will turn towards its lock target. This value is multiplied against Time.deltaTime")]
-    [SerializeField] private float _targetLockAngleAdaptionRate = 0.2f;
+    [SerializeField][Range(0f, 10f)] private float _targetLockAngleAdaptionRate = 5f;
 
     private static PlayerCameraController _instance = null;
     private readonly RaycastHit[] _lockTargetHits = new RaycastHit[50]; // a buffer of 50 possible targets in one sphere cast should be more than enough
@@ -52,13 +58,14 @@ public class PlayerCameraController : MonoBehaviour
     public static bool IsLockedToTarget { get { return _instance._lockTarget != null; } }
 
     private bool _isUsingGamepad = false;
-    private float? _lockFacingTimer = null;
     private float? _lostTargetRecoveryTimer = null;
+    private TargetLockFacingData _lockFacingData = null;
     private Transform _camera = null;
     private Transform _lockTarget = null;
     private Vector3 _originPoint = Vector3.zero;
     private Vector3 _facingPoint = Vector3.zero;
     private Vector3 _targetRotation = Vector3.zero;
+    private Vector3 _rawCameraPosition = Vector3.zero; // proposed camera destination without any collision checks
 
     private void Awake()
     {
@@ -82,6 +89,7 @@ public class PlayerCameraController : MonoBehaviour
         _facingPoint = _originPoint;
         Quaternion startRotation = Quaternion.Euler(_initialCameraLearnAngle, transform.eulerAngles.y, transform.eulerAngles.z);
         _camera.SetPositionAndRotation(_originPoint + startRotation * Vector3.back * _cameraDistance, startRotation);
+        _rawCameraPosition = _camera.position;
         _targetRotation = startRotation.eulerAngles;
     }
 
@@ -138,93 +146,93 @@ public class PlayerCameraController : MonoBehaviour
 
     private void MoveCamera()
     {
-        // The point that we will calculate our angle delta against to make the mover orbit arround our camera
-        Vector3 oldRotation = _camera.eulerAngles;
-        Vector3 deltaAnglePoint = _lockTarget != null ? _lockTarget.position : _facingPoint;
-
         // Apply the difference between our current and our target rotation. Ignore the X axis because that one is fixed and can only be changed by input.
-        _camera.LookAt(deltaAnglePoint);
+        _camera.LookAt(_lockTarget != null ? _lockTarget.position : _facingPoint);
         _targetRotation.y = _camera.eulerAngles.y;
         _targetRotation.z = _camera.eulerAngles.z;
-
-        // We have ongoing camera movement input. Input is going to rotate the camera arround the target instantly without any lerp
-        if (TurnInputValue.magnitude != 0f && _lockTarget == null)
-        {
-            Vector2 turnOffset = GetInputOffsets();
-
-            // Apply the X input to our target roation. The remaining y and z will get updated outside of the input handling
-            _targetRotation.x = Mathf.Clamp(Mathf.DeltaAngle(0f, _targetRotation.x) - turnOffset.y, _minCameraLeanAngle, _maxCameraLeanAngle);
-
-            // Now we are going to orbit the camera arround our facing point without any lerp
-            Vector3 angle = _camera.eulerAngles;
-            angle.y += turnOffset.x;
-            angle.x = Mathf.DeltaAngle(0f, angle.x); // clamp the angle to a 180 degrees range (-180 to 180) so our angle limits can work
-
-            // Only apply the camera X input if we are not beyond the lean angle limits already due to lerping
-            if (angle.x > _minCameraLeanAngle && angle.x < _maxCameraLeanAngle)
-                angle.x = Mathf.Clamp(Mathf.DeltaAngle(0f, angle.x) - turnOffset.y, _minCameraLeanAngle, _maxCameraLeanAngle);
-
-            _camera.position = _facingPoint + Quaternion.Euler(angle) * (Vector3.back * Vector3.Distance(_camera.position, _facingPoint));
-            _camera.LookAt(_facingPoint);
-        }
-        else if (_lockTarget != null)
+        if (_lockTarget != null) // locked targets enforce a fixed lean angle
             _targetRotation.x = _lockedCameraLeanAngle;
 
-        // Estimate our camera position destination
+        // Calculate our raw camera destination
         Vector3 direction = Quaternion.Euler(_targetRotation) * Vector3.back;
         Vector3 cameraDestination = _facingPoint + direction * _cameraDistance;
-        // Check for destination collision
-        if (Physics.Linecast(_facingPoint, cameraDestination, out RaycastHit hitInfo, _collisionLayerMask.value))
-            cameraDestination = hitInfo.point;
-
         if (_cameraMovementDampening != 0f)
-            cameraDestination = Vector3.Lerp(_camera.position, cameraDestination, (1f - _cameraMovementDampening) * Time.deltaTime * 10f);
+            _rawCameraPosition = Vector3.Lerp(_rawCameraPosition, cameraDestination, (1f - _cameraMovementDampening) * Time.deltaTime * 10f);
+        else
+            _rawCameraPosition = cameraDestination;
 
-        // Move the camera to the new position
-        _camera.position = cameraDestination;
+        // Next we will rotate our camera based on our input
+        if (_lockTarget == null)
+            HandleCameraTurnInput();
 
-        // And finally we can do collision and facing
-        HandleCameraCollisionAndFacing(oldRotation);
+        // Now we can relocate the camera
+        if (Physics.Linecast(_facingPoint, _rawCameraPosition, out RaycastHit hitInfo, _collisionLayerMask.value))
+            _camera.position = hitInfo.point;
+        else
+            _camera.position = _rawCameraPosition;
+
+        // And now we hande
+        HandleCameraFacing();
     }
 
-    private void HandleCameraCollisionAndFacing(Vector3 oldRotation)
+    private void HandleCameraTurnInput()
     {
-        Vector3 currentRotation = _camera.eulerAngles;
-        _camera.LookAt(_facingPoint);
+        if (TurnInputValue.magnitude == 0f)
+            return;
 
-        if (Physics.Linecast(_facingPoint, _camera.position, out RaycastHit hitInfo, _collisionLayerMask.value))
-            _camera.position = hitInfo.point;
+        // First we check our target destination for the camera
+        Vector3 currentDestination = Quaternion.Euler(_targetRotation) * (Vector3.back * _cameraDistance);
 
-        // Make sure that our leaning angle stays within boundaries
-        float angleX = Mathf.Clamp(Mathf.DeltaAngle(0f, currentRotation.x), _minCameraLeanAngle, _maxCameraLeanAngle);
+        // Apply rotation offsets to our target rotation
+        Vector2 turnOffset = GetInputOffsets();
+        _targetRotation.x = Mathf.Clamp(Mathf.DeltaAngle(0f, _targetRotation.x) - turnOffset.y, _minCameraLeanAngle, _maxCameraLeanAngle);
+        _targetRotation.y += turnOffset.x;
 
-        // We have locked onto a target. Lerp towards the target angle and increase the speed the longer it takes
-        if (_lockFacingTimer.HasValue)
+        // Now we calculate the destination again and apply the delta between the two points to the raw destination
+        Vector3 turnedDestination = Quaternion.Euler(_targetRotation) * (Vector3.back * _cameraDistance);
+        _rawCameraPosition += turnedDestination - currentDestination;
+    }
+
+    private void HandleCameraFacing()
+    {
+        // Default behavior: just face the target
+        float angleX = 0f;
+        if (_lockFacingData == null)
         {
-            _lockFacingTimer += Time.deltaTime * _targetLockAngleAdaptionRate;
-            _camera.rotation = Quaternion.Lerp(Quaternion.Euler(oldRotation), Quaternion.Euler(currentRotation), Mathf.Min(_lockFacingTimer.Value));
-            if (_lockFacingTimer.Value >= 1f)
-                _lockFacingTimer = null;
+            _camera.LookAt(_lockTarget != null ? _lockTarget.position : _facingPoint);
+            // Never allow the lean angle to go beyond our limitations
+             angleX = Mathf.Clamp(Mathf.DeltaAngle(0f, _camera.eulerAngles.x), _minCameraLeanAngle, _maxCameraLeanAngle);
+            _camera.rotation = Quaternion.Euler(angleX, _camera.eulerAngles.y, _camera.eulerAngles.z);
+            return;
         }
-        else
-            _camera.rotation = Quaternion.Euler(angleX, currentRotation.y, currentRotation.z);
+
+        // Lerp towards our target
+        _camera.LookAt(_lockTarget != null ? _lockTarget.position : _facingPoint);
+        _lockFacingData.ElapsedTime += Time.deltaTime * _targetLockAngleAdaptionRate;
+        _camera.rotation = Quaternion.Lerp(_lockFacingData.OriginalRotation, _camera.rotation, _lockFacingData.ElapsedTime);
+        if (_lockFacingData.ElapsedTime >= 1f)
+            _lockFacingData = null;
     }
 
     public static void ToggleCameraLock()
     {
-        // Release active lock
+        TargetLockFacingData data = null;
+
         if (_instance._lockTarget != null)
         {
             _instance._lockTarget = null;
-            _instance._lockFacingTimer = 0f;
+            data = _instance._lockFacingData = new();
         }
         else
         {
             // Select new lock target
             _instance._lockTarget = _instance.SelectLockTarget();
             if (_instance._lockTarget != null)
-                _instance._lockFacingTimer = 0f;
+                data = _instance._lockFacingData = new();
         }
+
+        if (data != null)
+            data.OriginalRotation = _instance._camera.rotation;
 
         PlayerHUDController.SetLockOnTarget(_instance._lockTarget);
     }
