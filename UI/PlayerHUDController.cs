@@ -1,10 +1,11 @@
+/*
 * This file is part of the UnityComponents repository authored by Ovahlord (https://github.com/Ovahlord/UnityComponents)
 * All components in this repository are royalty free and can be used for commercial purposes. Enjoy.
 */
-
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -28,13 +29,34 @@ public class PlayerHUDController : MonoBehaviour
     [Header("Target Lock")]
     [SerializeField] private RectTransform _lockIndicatorPoint = null;
 
+    [Header("Death Message")]
+    [SerializeField] private CanvasGroup _deathMessageGroup = null;
+    [SerializeField] float _deathMessageTargetScale = 1.5f;
+    [SerializeField] float _deathMessageGrowthSpeed = 0.1f;
+
+    [Header("Area Message")]
+    [SerializeField] private CanvasGroup _areaMessageGroup = null;
+    [SerializeField] private TMP_Text _areaMessageText = null;
+    [SerializeField] private float _areaMessageFadeSpeed = 0.5f;
+    [SerializeField] private float _areaMessageDuration = 3f;
+
     private static PlayerHUDController _instance = null;
 
+    // Target Locking
     private Transform _lockTarget = null;
     private Image _lockTargetImage = null;
 
+    // Player Bars
     private readonly float[] _playerBarInitialWidth = new float[(int)RessourceIndex.Max];
     private readonly float?[] _playerBarLossDelayTimers = new float?[(int)RessourceIndex.Max];
+
+    // Messages
+    private bool _deathMessageEnabled = false;
+    private float? _areaMessageDurationTimer = null;
+    private float _areaMessageTargetAlpha = 0f;
+
+
+    // Reference to the player stats controller
     private UnitStatsController _playerStatsController = null;
 
     private void Awake()
@@ -78,6 +100,8 @@ public class PlayerHUDController : MonoBehaviour
     {
         UpdatePlayerBars(_playerStatsController.CurrentHealthPct, _playerStatsController.CurrentPowerPct, _playerStatsController.CurrentStaminaPct);
         UpdateLockIndicatorPoisition();
+        UpdateDeathMessage();
+        UpateAreaMessage();
     }
 
     public void UpdatePlayerBars(float currentHealthPct, float currentPowerPct, float currentStaminaPct)
@@ -98,8 +122,6 @@ public class PlayerHUDController : MonoBehaviour
         // update the loss bar
         if (!_playerBarLossDelayTimers[(int)ressource].HasValue)
         {
-            if (ressource == RessourceIndex.Stamina)
-                Debug.Log($"current: {currentPct}   target: {targetValuePct}");
             // If we have lost more than x% between the last and the current update, trigger the animation delay
             if (currentPct > targetValuePct && (currentPct - targetValuePct) >= barData.LossBarAnimationThreshold)
                 _playerBarLossDelayTimers[(int)ressource] = barData.LossBarAnimationDelay;
@@ -140,5 +162,51 @@ public class PlayerHUDController : MonoBehaviour
             return;
 
         _lockIndicatorPoint.position = Camera.main.WorldToScreenPoint(_lockTarget.position);
+    }
+
+    public static void ShowDeathScreen()
+    {
+        _instance._deathMessageEnabled = true;
+        _instance._deathMessageGroup.gameObject.SetActive(true);
+    }
+
+    private void UpdateDeathMessage()
+    {
+        if (!_deathMessageEnabled)
+            return;
+
+        _deathMessageGroup.transform.localScale = Vector3.MoveTowards(_deathMessageGroup.transform.localScale, Vector3.one * _deathMessageTargetScale, _deathMessageGrowthSpeed * Time.deltaTime);
+        _deathMessageGroup.alpha = Mathf.MoveTowards(_deathMessageGroup.alpha, 1f, 0.5f * Time.deltaTime);
+    }
+
+    public static void ShowAreaMessage(string message)
+    {
+        if (_instance._areaMessageGroup.alpha != 0f)
+            return;
+
+        _instance._areaMessageTargetAlpha = 1f;
+        _instance._areaMessageText.text = message;
+    }
+
+    private void UpateAreaMessage()
+    {
+        if (_areaMessageGroup.alpha == _areaMessageTargetAlpha && !_areaMessageDurationTimer.HasValue)
+            return;
+
+        if (!_areaMessageDurationTimer.HasValue)
+        {
+            _areaMessageGroup.alpha = Mathf.MoveTowards(_areaMessageGroup.alpha, _areaMessageTargetAlpha, _areaMessageFadeSpeed * Time.deltaTime);
+            if (_areaMessageGroup.alpha == _areaMessageTargetAlpha && _areaMessageGroup.alpha != 0f)
+                _areaMessageDurationTimer = _areaMessageDuration;
+        }
+        else
+        {
+            _areaMessageDurationTimer -= Time.deltaTime;
+            if (_areaMessageDurationTimer.Value <= 0f)
+            {
+                _areaMessageDurationTimer = null;
+                _areaMessageTargetAlpha = 0f;
+            }
+        }
     }
 }
